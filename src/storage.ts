@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 
 export interface AuthCode {
   code: string;
@@ -74,24 +73,24 @@ class InMemoryStorage {
 export const storage = new InMemoryStorage();
 
 // Helper functions
-export function generateAuthCode(): string {
-  return randomUUID();
+export async function generateAuthCode(): Promise<string> {
+  return crypto.randomUUID();
 }
 
-export function generateAccessToken(): string {
-  return randomUUID();
+export async function generateAccessToken(): Promise<string> {
+  return crypto.randomUUID();
 }
 
-export function createAuthCode(
+export async function createAuthCode(
   clientId: string,
   redirectUri: string,
   codeChallenge: string,
   codeChallengeMethod: string,
   scopes: string[],
   state?: string
-): AuthCode {
+): Promise<AuthCode> {
   return {
-    code: generateAuthCode(),
+    code: await generateAuthCode(),
     clientId,
     redirectUri,
     codeChallenge,
@@ -102,12 +101,12 @@ export function createAuthCode(
   };
 }
 
-export function createAccessToken(
+export async function createAccessToken(
   clientId: string,
   scopes: string[]
-): AccessToken {
+): Promise<AccessToken> {
   return {
-    token: generateAccessToken(),
+    token: await generateAccessToken(),
     clientId,
     scopes,
     expiresAt: Date.now() + 60 * 60 * 1000 // 1 hour

@@ -26,8 +26,8 @@ function createMcpServer(): McpServer {
     {
       message: z.string().describe('Message to echo back').optional().default('pong')
     },
-    async ({ message }, { auth }) => {
-      console.log('Ping tool called with auth:', auth);
+    async ({ message }) => {
+      console.log('Ping tool called');
       
       return {
         content: [

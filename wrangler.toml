@@ -1,0 +1,6 @@
+name = "minimal-mcp-server"
+main = "./src/worker.ts"
+compatibility_date = "2025-06-07"
+kv_namespaces = [
+  { binding = "MCP_KV", id = "6f7f24fd1c0b416dbd516e7a11925cfe" }
+]

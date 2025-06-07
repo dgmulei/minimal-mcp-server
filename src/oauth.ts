@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
-import { createHash } from 'crypto';
 import { z } from 'zod';
 import { storage, createAuthCode, createAccessToken } from './storage.js';
+export { createAuthCode, createAccessToken };
+
 
 // Validation schemas
-const AuthorizeSchema = z.object({
+export const AuthorizeSchema = z.object({
   response_type: z.literal('code'),
   client_id: z.string(),
   redirect_uri: z.string().url(),
@@ -14,7 +15,8 @@ const AuthorizeSchema = z.object({
   code_challenge_method: z.literal('S256')
 });
 
-const TokenSchema = z.object({
+
+export const TokenSchema = z.object({
   grant_type: z.literal('authorization_code'),
   code: z.string(),
   redirect_uri: z.string().url(),
@@ -59,15 +61,16 @@ export function authorizationServerMetadata(req: Request, res: Response): void {
 }
 
 // Authorization endpoint - handles the OAuth authorization flow
-export function authorize(req: Request, res: Response): void {
+export async function authorize(req: Request, res: Response): Promise<void> {
   try {
     // Validate query parameters
     const params = AuthorizeSchema.parse(req.query);
     
     // Validate redirect URI (must be localhost or HTTPS)
-    const redirectUrl = new URL(params.redirect_uri);
-    if (redirectUrl.protocol !== 'https:' && 
-        !['localhost', '127.0.0.1'].includes(redirectUrl.hostname)) {
+    // Validate redirect URI (must be localhost or HTTPS)
+    const urlObj = new URL(params.redirect_uri);
+    if (urlObj.protocol !== 'https:' && 
+        !['localhost', '127.0.0.1'].includes(urlObj.hostname)) {
       res.status(400).json({
         error: 'invalid_request',
         error_description: 'Redirect URI must be localhost or HTTPS'
@@ -77,7 +80,7 @@ export function authorize(req: Request, res: Response): void {
 
     // For this minimal implementation, we'll auto-approve the request
     // In a real implementation, you'd show a consent screen here
-    const authCode = createAuthCode(
+    const authCode = await createAuthCode(
       params.client_id,
       params.redirect_uri,
       params.code_challenge,
@@ -89,13 +92,12 @@ export function authorize(req: Request, res: Response): void {
     storage.storeAuthCode(authCode);
 
     // Redirect back to client with authorization code
-    const redirectUrl = new URL(params.redirect_uri);
-    redirectUrl.searchParams.set('code', authCode.code);
+    urlObj.searchParams.set('code', authCode.code);
     if (params.state) {
-      redirectUrl.searchParams.set('state', params.state);
+      urlObj.searchParams.set('state', params.state);
     }
 
-    res.redirect(redirectUrl.toString());
+    res.redirect(urlObj.toString());
   } catch (error) {
     console.error('Authorization error:', error);
     res.status(400).json({
@@ -106,7 +108,7 @@ export function authorize(req: Request, res: Response): void {
 }
 
 // Token endpoint - exchanges authorization code for access token
-export function token(req: Request, res: Response): void {
+export async function token(req: Request, res: Response): Promise<void> {
   try {
     // Validate request body
     const params = TokenSchema.parse(req.body);
@@ -132,11 +134,12 @@ export function token(req: Request, res: Response): void {
     }
 
     // Verify PKCE challenge
-    const codeVerifierHash = createHash('sha256')
-      .update(params.code_verifier)
-      .digest('base64url');
-    
-    if (codeVerifierHash !== authCode.codeChallenge) {
+    const codeVerifierHashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(params.code_verifier));
+    const codeVerifierHashB64 = btoa(String.fromCharCode(...new Uint8Array(codeVerifierHashBuffer)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    if (codeVerifierHashB64 !== authCode.codeChallenge) {
       res.status(400).json({
         error: 'invalid_grant',
         error_description: 'Invalid code verifier'
@@ -148,7 +151,7 @@ export function token(req: Request, res: Response): void {
     storage.deleteAuthCode(params.code);
 
     // Create access token
-    const accessToken = createAccessToken(authCode.clientId, authCode.scopes);
+    const accessToken = await createAccessToken(authCode.clientId, authCode.scopes);
     storage.storeAccessToken(accessToken);
 
     // Return token response
